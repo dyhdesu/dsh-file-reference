@@ -20,15 +20,11 @@ DeepSeek Harness 的侧栏文件树只有**左键**一个手势（点文件=打�
 
 ## 安装
 
-### 方式一 · 插件页添加（桌面版用户）
+> **发布状态**：本插件目前只在 GitHub 发布，**尚未发布到 npm**。下面标注「npm 未发布」的写法暂不可用，等发布后再用。
+
+### 方式一 · 插件页添加（桌面版用户，推荐）
 
 DSH 桌面版：打开侧边栏**插件**页 → **添加插件** → 粘贴下面一行 → 装完点**启用** → 按提示重启或刷新。
-
-```
-dsh-file-reference
-```
-
-或直接粘贴 GitHub 地址：
 
 ```
 https://github.com/dyhdesu/dsh-file-reference
@@ -37,15 +33,15 @@ https://github.com/dyhdesu/dsh-file-reference
 ### 方式二 · 命令行（web / headless profile）
 
 ```
-dsh plugin --profile web add dsh-file-reference
+dsh plugin --profile web add github:dyhdesu/dsh-file-reference
 ```
 
 装完重启 `dsh web`，浏览器硬刷新。
 
-从源码仓库安装（npm 未发布时用这条）：
+npm 发布后可直接用包名安装（**当前 npm 未发布，此条暂不可用**）：
 
-```
-dsh plugin --profile web add github:dyhdesu/dsh-file-reference
+```sh
+dsh plugin --profile web add dsh-file-reference
 ```
 
 ### 方式三 · 本地目录接线（开发用）
@@ -73,7 +69,7 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 - 官方文件树（`@deepseek-ai/dsh-client-ui-sidebar-files`）的每个行节点带 `data-files-entry="file|directory"` 与 `data-files-path="绝对路径"`，树根带 `data-files-root`；插件在**捕获阶段**监听 `contextmenu` 命中这些行——官方树本身没有任何右键处理，这块手势是空的。
 - 插入走宿主 `conversation` 服务的 `input.shell(sessionId).addFiles([reference], [])`，即 `SessionInputShell.addFiles`——官方给引用 chip 留的程序化入口（内部走 `draftEditor.insertFileReferences`）；chip 形态 `{source:'reference', ref, label, appearance, clipboardText}` 与官方 `@` 菜单、拖文件进输入框**完全一致**，不是自造协议。
 - 当前会话由 `uiSession.current.value.key` 提供；多会话时按文件树根路径与会话 `cwd` 比对纠偏，避免把引用插进别的会话。
-- 与官方 `@` 引用语义对齐：引用只携带**路径**，不读取也不附带文件内容（官方 `dsh-file-reference` 明确规定「选中候选绝不读取或附带文件内容」），模型要看内容必须自己调文件系统工具。
+- 与官方 `@` 引用语义对齐：引用只携带**路径**，不读取也不附带文件内容（官方 `@deepseek-ai/dsh-file-reference` 明文规定「选中候选绝不读取或附带文件内容」），模型要看内容必须自己调文件系统工具。
 - **纯前端插件**：host 半区为空操作（`export function apply() {}`），不碰宿主源码、不注册路由、不改配置，装卸无残留；HMR 重评估时先拆上一代句柄（监听器、菜单、代际槽）。
 
 ## 兼容性
