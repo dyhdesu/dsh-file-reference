@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizePath, isWindowsPath, samePath, relativize, formatMention, buildReference, pickSessionId } from '../src/logic.mjs'
+import { normalizePath, isWindowsPath, samePath, relativize, formatMention, buildReference, pickSessionId, firstTitleWithin, contextTarget } from '../src/logic.mjs'
 
 test('normalizePath 反斜杠归一', () => {
   assert.equal(normalizePath('a\\b\\c'), 'a/b/c')
@@ -167,4 +167,77 @@ test('pickSessionId Windows 盘符大小写不一致仍能归属', () => {
   }
   assert.equal(pickSessionId(byId, 's1', 'C:/w/two'), 's2')
   assert.equal(pickSessionId(byId, 's1', 'C:\\W\\ONE'), 's1')
+})
+
+// ---- 右键命中判定：侧栏文件树行 / 交付文件卡片 ----
+
+function stubEl(attrs, children = []) {
+  const node = {
+    attributes: attrs,
+    children,
+    parent: undefined,
+    getAttribute(name) { return name in this.attributes ? this.attributes[name] : null },
+    closest(selector) {
+      const attr = /^\[([a-zA-Z0-9-]+)\]$/u.exec(selector)?.[1]
+      for (let current = this; current; current = current.parent) {
+        if (attr !== undefined && attr in current.attributes) return current
+      }
+      return null
+    },
+  }
+  for (const child of children) child.parent = node
+  return node
+}
+
+test('contextTarget 命中侧栏树行并带上树根', () => {
+  const root = stubEl({ 'data-files-root': '/w/root' })
+  const body = stubEl({ 'data-files-body': 'true' }, [])
+  const row = stubEl({ 'data-files-entry': 'file', 'data-files-path': '/w/root/sub/a.txt' })
+  root.children.push(body); body.parent = root
+  body.children.push(row); row.parent = body
+  assert.deepEqual(contextTarget(row), { path: '/w/root/sub/a.txt', kind: 'file', root: '/w/root' })
+})
+
+test('contextTarget 树外行、非法 kind、无 closest 均不命中', () => {
+  const loose = stubEl({ 'data-files-entry': 'file', 'data-files-path': '/w/root/a.txt' })
+  assert.equal(contextTarget(loose), undefined)
+  const root = stubEl({ 'data-files-root': '/w/root' })
+  const body = stubEl({ 'data-files-body': 'true' })
+  const other = stubEl({ 'data-files-entry': 'other', 'data-files-path': '/w/root/a.txt' })
+  root.children.push(body); body.parent = root
+  body.children.push(other); other.parent = body
+  assert.equal(contextTarget(other), undefined)
+  assert.equal(contextTarget(null), undefined)
+  assert.equal(contextTarget({}), undefined)
+})
+
+test('contextTarget 命中交付文件卡片，路径取预览按钮 title', () => {
+  const preview = stubEl({ title: '/w/root/out/combo_index.html' })
+  const card = stubEl({ 'data-presented-file': 'true' }, [preview])
+  const name = stubEl({})
+  const body = stubEl({}, [name])
+  card.children.push(body); body.parent = card
+  assert.deepEqual(contextTarget(name), { path: '/w/root/out/combo_index.html', kind: 'file', root: undefined })
+})
+
+test('contextTarget 卡片无 title / title 全空白时不命中', () => {
+  assert.equal(contextTarget(stubEl({ 'data-presented-file': 'true' })), undefined)
+  const blank = stubEl({ title: '   ' })
+  assert.equal(contextTarget(stubEl({ 'data-presented-file': 'true' }, [blank])), undefined)
+})
+
+test('firstTitleWithin 按文档顺序取第一个非空 title（不被后续 ⋯ 菜单抢走）', () => {
+  const preview = stubEl({ title: '/w/root/a.html' })
+  const actions = stubEl({ title: '打开方式' })
+  const card = stubEl({}, [preview, actions])
+  assert.equal(firstTitleWithin(card), '/w/root/a.html')
+  assert.equal(firstTitleWithin(stubEl({})), undefined)
+})
+
+test('交付卡片命中后能直接拼出相对 chip（含 Windows 形态）', () => {
+  const preview = stubEl({ title: 'C:\\w\\root\\out\\combo_index.html' })
+  const card = stubEl({ 'data-presented-file': 'true' }, [preview])
+  const target = contextTarget(card)
+  assert.equal(target.kind, 'file')
+  assert.equal(buildReference(target.path, target.kind, 'C:/w/root').ref, '@out/combo_index.html')
 })

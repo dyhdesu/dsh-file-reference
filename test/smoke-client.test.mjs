@@ -317,3 +317,56 @@ test('apply 在服务全缺时不抛异常（降级兜底）', () => {
   assert.doesNotThrow(() => harness.documentEl.querySelectorAll('.dsh-fileref-menu')[0].children[0].click())
   assert.equal(harness.documentEl.querySelectorAll('.dsh-fileref-toast')[0].dataset.tone, 'error')
 })
+
+// 交付文件卡片：官方结构为 div[data-presented-file] 内首个 button 的 title=绝对路径
+function presentedCardName(path, withTitle = true) {
+  const card = new FakeElement('div')
+  card.setAttribute('data-presented-file', 'true')
+  const preview = new FakeElement('button')
+  if (withTitle) preview.setAttribute('title', path)
+  const body = new FakeElement('div')
+  const name = new FakeElement('span')
+  card.appendChild(preview); card.appendChild(body); body.appendChild(name)
+  return name
+}
+
+test('右键交付文件卡片 → 菜单 → 插入相对 chip', () => {
+  const harness = makeHarness()
+  const exports = loadClient(harness).factory(() => ({}))
+  const { ctx, addFilesCalls } = makeCtx()
+  exports.apply(ctx)
+
+  const name = presentedCardName('/w/root/out/combo_index.html')
+  const event = fireContextMenu(harness, name)
+  assert.equal(event.defaultPrevented, true)
+
+  const menus = harness.documentEl.querySelectorAll('.dsh-fileref-menu')
+  assert.equal(menus.length, 1)
+  menus[0].children[0].click()
+  assert.deepEqual(addFilesCalls[0].refs, [{
+    source: 'reference',
+    ref: '@out/combo_index.html',
+    label: 'combo_index.html',
+    appearance: 'file',
+    clipboardText: '@out/combo_index.html',
+  }])
+})
+
+test('交付卡片无 title 时不拦截右键（不吞默认行为、不弹菜单）', () => {
+  const harness = makeHarness()
+  const exports = loadClient(harness).factory(() => ({}))
+  exports.apply(makeCtx().ctx)
+  const name = presentedCardName('/w/root/out/x.html', false)
+  assert.equal(fireContextMenu(harness, name).defaultPrevented, false)
+  assert.equal(harness.documentEl.querySelectorAll('.dsh-fileref-menu').length, 0)
+})
+
+test('交付卡片复制引用文本写入剪贴板', async () => {
+  const harness = makeHarness()
+  const exports = loadClient(harness).factory(() => ({}))
+  exports.apply(makeCtx().ctx)
+  fireContextMenu(harness, presentedCardName('/w/root/out/combo_index.html'))
+  harness.documentEl.querySelectorAll('.dsh-fileref-menu')[0].children[1].click()
+  await new Promise((r) => setImmediate(r))
+  assert.equal(harness.navigatorEl.copied, '@out/combo_index.html')
+})

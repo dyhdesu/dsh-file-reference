@@ -75,3 +75,46 @@ export function pickSessionId(byId, currentId, treeRoot) {
   }
   return currentId
 }
+
+/** 按文档顺序找节点内第一个非空 title 属性：官方把交付文件的绝对路径放在卡片预览按钮（首个子节点）的 title 上；后续兄弟节点（如 ⋯ 操作菜单）可能另有 title，故顺序敏感。 */
+export function firstTitleWithin(node) {
+  const stack = [node]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (current === undefined || current === null) continue
+    const title = typeof current.getAttribute === 'function' ? current.getAttribute('title') : null
+    if (title !== null && title !== undefined && String(title).trim() !== '') return String(title)
+    const children = current.children
+    if (children === undefined || children === null) continue
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index])
+  }
+  return undefined
+}
+
+/**
+ * 命中右键目标，返回 { path, kind, root }；未命中或官方结构变化取不到路径时返回 undefined
+ * （调用方据此不拦截右键，让浏览器默认行为继续）。
+ * - 侧栏文件树行：data-files-entry(type) + data-files-path(绝对)，树根 data-files-root 用于会话纠偏。
+ * - 交付文件卡片：data-presented-file 只作标记，路径在预览按钮 title 上（官方内部契约，非公开 API）；
+ *   归属即当前会话，故 root 留空。
+ */
+export function contextTarget(element) {
+  if (element === undefined || element === null || typeof element.closest !== 'function') return undefined
+  const row = element.closest('[data-files-entry]')
+  if (row !== null && row !== undefined && typeof row.closest === 'function' && row.closest('[data-files-body]') !== null) {
+    const kind = row.getAttribute('data-files-entry')
+    const path = row.getAttribute('data-files-path')
+    if ((kind === 'file' || kind === 'directory') && path !== null && path !== undefined && path !== '') {
+      const rootNode = row.closest('[data-files-root]')
+      const fallback = typeof document !== 'undefined' && typeof document.querySelector === 'function' ? document.querySelector('[data-files-root]') : null
+      const rootValue = (rootNode ?? fallback)?.getAttribute?.('data-files-root')
+      return { path, kind, root: rootValue === null || rootValue === undefined ? undefined : rootValue }
+    }
+  }
+  const card = element.closest('[data-presented-file]')
+  if (card !== null && card !== undefined) {
+    const path = firstTitleWithin(card)
+    if (path !== undefined) return { path, kind: 'file', root: undefined }
+  }
+  return undefined
+}

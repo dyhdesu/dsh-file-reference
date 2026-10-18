@@ -1,12 +1,12 @@
 # dsh-file-reference
 
-侧栏「工作区文件」树**右键**一键引用：把文件/文件夹以原生 `@路径` 引用 chip 插进当前会话输入框。
+**右键**一键引用：把侧栏「工作区文件」树里的文件/文件夹、或消息里**已交付的文件卡片**，以原生 `@路径` 引用 chip 插进当前会话输入框。
 
-DeepSeek Harness 的侧栏文件树只有**左键**一个手势（点文件=打开预览、点目录=展开），想引用某个文件只能手打 `@` 再一层层找。本插件给树上补上**右键**：引用一步到位，走的是宿主自己的引用通道。
+DeepSeek Harness 里想引用一个文件，只能手打 `@` 再一层层找；而侧栏文件树只有**左键**一个手势（点文件=打开预览、点目录=展开），交付文件卡片也没有引用入口。本插件补上**右键**这一步，走的是宿主自己的引用通道，不自造协议。
 
 ## 效果
 
-在右侧栏「工作区文件」面板里，**右键**任意文件或文件夹行：
+在右侧栏「工作区文件」面板里**右键**任意文件或文件夹行，或者在消息里**右键已交付的文件卡片**（例如收尾回复下方的 `combo_index.html` 卡片）：
 
 | 菜单项 | 行为 |
 |---|---|
@@ -15,6 +15,7 @@ DeepSeek Harness 的侧栏文件树只有**左键**一个手势（点文件=打�
 
 - 路径自动折算成相对当前会话工作区的相对路径；含空格的路径自动加引号（`@"my dir/readme.md"`）；目录尾随 `/`。
 - 插入成功自动聚焦输入框；会话未挂载、正在发送或输入框拒绝插入时**给出提示**，不静默失败。
+- 命中不到路径时**不拦截右键**，浏览器的默认行为照常。
 - 菜单样式全取宿主主题令牌，亮暗主题跟随；点击别处、Esc、滚动、窗口失焦自动关闭。
 - 中英双语，跟随宿主语言。
 
@@ -66,7 +67,9 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 
 ## 原理
 
-- 官方文件树（`@deepseek-ai/dsh-client-ui-sidebar-files`）的每个行节点带 `data-files-entry="file|directory"` 与 `data-files-path="绝对路径"`，树根带 `data-files-root`；插件在**捕获阶段**监听 `contextmenu` 命中这些行——官方树本身没有任何右键处理，这块手势是空的。
+- 两个右键表面都由一个纯逻辑函数 `contextTarget()` 判定，命中才拦截：
+  - **侧栏文件树行**：官方文件树（`@deepseek-ai/dsh-client-ui-sidebar-files`）的行节点带 `data-files-entry="file|directory"` 与 `data-files-path="绝对路径"`，树根带 `data-files-root`；官方树本身没有任何右键处理，这块手势是空的。
+  - **交付文件卡片**：官方交付卡片（`@deepseek-ai/dsh-client-ui-deliverables`）是 `div[data-presented-file]`，其中**只作标记、不带路径**；绝对路径在卡片内**首个带 `title` 的节点**（预览按钮，官方 `resolveWorkspacePath(cwd, file.path)`）上。该 `title` 是非 i18n 的，但属于官方**内部实现**而非公开契约——因此插件按**文档顺序**取第一个非空 `title`，取不到就完全不拦截右键。卡片位于正文中，归属即当前会话，无需树根纠偏。
 - 插入走宿主 `conversation` 服务的 `input.shell(sessionId).addFiles([reference], [])`，即 `SessionInputShell.addFiles`——官方给引用 chip 留的程序化入口（内部走 `draftEditor.insertFileReferences`）；chip 形态 `{source:'reference', ref, label, appearance, clipboardText}` 与官方 `@` 菜单、拖文件进输入框**完全一致**，不是自造协议。
 - 当前会话由 `uiSession.current.value.key` 提供；多会话时按文件树根路径与会话 `cwd` 比对纠偏，避免把引用插进别的会话。
 - 与官方 `@` 引用语义对齐：引用只携带**路径**，不读取也不附带文件内容（官方 `@deepseek-ai/dsh-file-reference` 明文规定「选中候选绝不读取或附带文件内容」），模型要看内容必须自己调文件系统工具。
@@ -76,13 +79,14 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 
 - 在 **DSH 0.2.1-rc.2**（macOS 桌面版）上开发与验证。
 - **Windows**：路径处理对齐官方文件树的混合分隔符契约（官方 `childPath` 以 `/` 拼接、宿主解析混合分隔符），盘符与 UNC 形态按大小写不敏感比对，POSIX 形态仍严格区分大小写。盘符、反斜杠与混合分隔符、盘符大小写差异、UNC 四种形态均有单元测试覆盖；**尚未在 Windows 实机验收**。
-- 依赖官方文件树的行属性契约（`data-files-entry` / `data-files-path` / `data-files-root`）与 `SessionInputShell.addFiles`。官方若改动这两处，插件需要跟进；已做降级：服务缺失或结构不匹配时不抛异常、不静默失败。
+- 依赖官方文件树的行属性契约（`data-files-entry` / `data-files-path` / `data-files-root`）、交付卡片的 `data-presented-file` 标记与其预览按钮的 `title`、以及 `SessionInputShell.addFiles`。官方若改动这三处，插件需要跟进；已做降级：服务缺失、结构不匹配或取不到路径时既不抛异常，也不拦截右键。
 - 输入框中的引用 chip 形态与官方 `@` 菜单、拖拽入文件一致，因此引用在草稿恢复、跨工作区切换等场景下与官方行为一致。
 
 ## 已知局限
 
 - 一次只处理单行：暂不支持多选批量引用。
-- 只接管侧栏文件树的行；消息区已渲染的引用 chip 不在此插件的右键范围内。
+- 右键覆盖侧栏文件树行与**交付文件卡片**两处；消息里已渲染的 `@` 引用 chip、改动文件卡片的行、收尾正文的行内文件链接暂不在范围内。
+- 交付卡片依赖官方 `title` 这个内部实现细节；官方改版后可能失效（表现为右键不再弹菜单，不影响其它功能）。
 - 目录引用只插入 `@目录/`，不展开目录内容（官方 `@` 菜单的 Tab 下钻能力未复刻）。
 - 引用 chip 插入需要会话已挂载且输入框可编辑；发送中会被宿主拒绝并提示。
 
@@ -92,7 +96,7 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 npm test
 ```
 
-36 项用例覆盖：路径归一化与 `@` 语法（含空格引号、目录尾斜杠、控制字符拒绝）、**Windows 形态**（盘符、反斜杠与混合分隔符、盘符大小写差异、UNC、根前缀兄弟目录不误判）、chip 载荷构造、会话归属判定、菜单生命周期与拆卸、服务全缺时的降级，以及 `src/client.js` 内联逻辑段与 `src/logic.mjs` 的**逐字同源校验**（防止两侧逻辑漂移）。
+45 项用例覆盖：路径归一化与 `@` 语法（含空格引号、目录尾斜杠、控制字符拒绝）、**Windows 形态**（盘符、反斜杠与混合分隔符、盘符大小写差异、UNC、根前缀兄弟目录不误判）、chip 载荷构造、会话归属判定、**右键命中判定**（树行/交付卡片/树外与无 title 不拦截）、菜单生命周期与拆卸、服务全缺时的降级，以及 `src/client.js` 内联逻辑段与 `src/logic.mjs` 的**逐字同源校验**（防止两侧逻辑漂移）。
 
 ## 许可
 
