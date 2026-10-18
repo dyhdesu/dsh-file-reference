@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizePath, relativize, formatMention, buildReference, pickSessionId } from '../src/logic.mjs'
+import { normalizePath, isWindowsPath, samePath, relativize, formatMention, buildReference, pickSessionId } from '../src/logic.mjs'
 
 test('normalizePath 反斜杠归一', () => {
   assert.equal(normalizePath('a\\b\\c'), 'a/b/c')
@@ -90,4 +90,81 @@ test('pickSessionId 主会话 cwd 与树根不一致时才扫描', () => {
   assert.equal(pickSessionId(byId, 's1', ''), 's1')
   assert.equal(pickSessionId(undefined, 's1', '/w/two'), 's1')
   assert.equal(pickSessionId(byId, undefined, '/w/none'), undefined)
+})
+
+// ---- Windows 形态：盘符、混合分隔符、UNC ----
+// 依据官方 dsh-client-ui-sidebar-files 的 childPath：行路径以 `/` 拼接，
+// 宿主解析混合分隔符；根路径可能仍是反斜杠形态（C:\Users\x\proj）。
+
+test('normalizePath Windows 盘符与反斜杠', () => {
+  assert.equal(normalizePath('C:\\Users\\Foo\\proj'), 'C:/Users/Foo/proj')
+  assert.equal(normalizePath('C:\\w\\root\\'), 'C:/w/root/')
+})
+
+test('isWindowsPath 只认盘符与 UNC', () => {
+  assert.equal(isWindowsPath('C:/w'), true)
+  assert.equal(isWindowsPath('c:/w'), true)
+  assert.equal(isWindowsPath('//srv/share'), true)
+  assert.equal(isWindowsPath('/w/root'), false)
+  assert.equal(isWindowsPath('w/root'), false)
+})
+
+test('samePath 仅 Windows 形态忽略大小写', () => {
+  assert.equal(samePath('C:/W/Root', 'c:/w/root'), true)
+  assert.equal(samePath('//SRV/Share', '//srv/share'), true)
+  assert.equal(samePath('/w/Root', '/w/root'), false)
+  assert.equal(samePath('C:/w/root', '/w/root'), false)
+  assert.equal(samePath('C:/w/root', 'C:/w/root/sub'), false)
+})
+
+test('relativize Windows 混合分隔符与反斜杠 cwd', () => {
+  assert.equal(relativize('C:\\w\\root\\src\\a.txt', 'C:/w/root'), 'src/a.txt')
+  assert.equal(relativize('C:\\w\\root/a.txt', 'C:\\w\\root'), 'a.txt')
+  assert.equal(relativize('C:\\w\\root\\sub\\', 'C:/w/root'), 'sub/')
+})
+
+test('relativize Windows 盘符大小写不一致仍相对化，且保留原大小写', () => {
+  assert.equal(relativize('c:/w/root/src/a.txt', 'C:/W/Root'), 'src/a.txt')
+  assert.equal(relativize('C:/W/Root/Src/A.txt', 'c:/w/root'), 'Src/A.txt')
+})
+
+test('relativize UNC 根', () => {
+  assert.equal(relativize('//srv/share/dir/a.txt', '//SRV/share'), 'dir/a.txt')
+})
+
+test('relativize Windows 根前缀兄弟目录不误判', () => {
+  assert.equal(relativize('C:/w/rootx/a.txt', 'C:/w/root'), 'C:/w/rootx/a.txt')
+})
+
+test('relativize POSIX 仍严格区分大小写', () => {
+  assert.equal(relativize('/w/Root/a.txt', '/w/root'), '/w/Root/a.txt')
+})
+
+test('buildReference Windows 路径出相对 chip', () => {
+  assert.deepEqual(buildReference('C:\\w\\root\\my dir\\a.txt', 'file', 'c:/w/root'), {
+    source: 'reference',
+    ref: '@"my dir/a.txt"',
+    label: 'a.txt',
+    appearance: 'file',
+    clipboardText: '@"my dir/a.txt"',
+  })
+})
+
+test('buildReference Windows 目录 chip', () => {
+  assert.deepEqual(buildReference('C:\\w\\root\\src', 'directory', 'C:/w/root'), {
+    source: 'reference',
+    ref: '@src/',
+    label: 'src/',
+    appearance: 'folder',
+    clipboardText: '@src/',
+  })
+})
+
+test('pickSessionId Windows 盘符大小写不一致仍能归属', () => {
+  const byId = {
+    s1: { cwd: 'C:\\w\\one' },
+    s2: { cwd: 'c:/W/two' },
+  }
+  assert.equal(pickSessionId(byId, 's1', 'C:/w/two'), 's2')
+  assert.equal(pickSessionId(byId, 's1', 'C:\\W\\ONE'), 's1')
 })

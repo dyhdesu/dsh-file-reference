@@ -2,7 +2,7 @@
   "name": "dsh-file-reference",
   "displayName": "DSH 文件树右键引用",
   "description": "侧栏「工作区文件」树里右键文件/文件夹，一键把 @引用 chip 插入当前会话输入框（走宿主拖拽入文件的同一通道），另可复制引用文本。Right-click a file-tree row to insert a native @ reference chip into the composer.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "author": "dyhdesu",
   "license": "MIT",

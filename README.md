@@ -75,6 +75,7 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 ## 兼容性
 
 - 在 **DSH 0.2.1-rc.2**（macOS 桌面版）上开发与验证。
+- **Windows**：路径处理对齐官方文件树的混合分隔符契约（官方 `childPath` 以 `/` 拼接、宿主解析混合分隔符），盘符与 UNC 形态按大小写不敏感比对，POSIX 形态仍严格区分大小写。盘符、反斜杠与混合分隔符、盘符大小写差异、UNC 四种形态均有单元测试覆盖；**尚未在 Windows 实机验收**。
 - 依赖官方文件树的行属性契约（`data-files-entry` / `data-files-path` / `data-files-root`）与 `SessionInputShell.addFiles`。官方若改动这两处，插件需要跟进；已做降级：服务缺失或结构不匹配时不抛异常、不静默失败。
 - 输入框中的引用 chip 形态与官方 `@` 菜单、拖拽入文件一致，因此引用在草稿恢复、跨工作区切换等场景下与官方行为一致。
 
@@ -91,7 +92,7 @@ rsync -a --delete src/ ~/.dsh/profiles/desktop/node_modules/dsh-file-reference/s
 npm test
 ```
 
-25 项用例覆盖：路径归一化与 `@` 语法（含空格引号、目录尾斜杠、控制字符拒绝）、chip 载荷构造、会话归属判定、菜单生命周期与拆卸、服务全缺时的降级，以及 `src/client.js` 内联逻辑段与 `src/logic.mjs` 的**逐字同源校验**（防止两侧逻辑漂移）。
+36 项用例覆盖：路径归一化与 `@` 语法（含空格引号、目录尾斜杠、控制字符拒绝）、**Windows 形态**（盘符、反斜杠与混合分隔符、盘符大小写差异、UNC、根前缀兄弟目录不误判）、chip 载荷构造、会话归属判定、菜单生命周期与拆卸、服务全缺时的降级，以及 `src/client.js` 内联逻辑段与 `src/logic.mjs` 的**逐字同源校验**（防止两侧逻辑漂移）。
 
 ## 许可
 

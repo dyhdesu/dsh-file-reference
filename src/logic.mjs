@@ -8,12 +8,24 @@ export function normalizePath(path) {
   return String(path).replace(/\\/g, '/')
 }
 
-/** 把绝对路径折算为相对 cwd 的路径；不在 cwd 下或 cwd 未知时原样返回绝对路径。 */
+/** 是否 Windows 形态路径（盘符 C:/… 或 UNC //server/share）；仅用于决定比较时是否忽略大小写。 */
+export function isWindowsPath(path) {
+  return /^[A-Za-z]:\//u.test(path) || path.startsWith('//')
+}
+
+/** 同一路径判定：先按字面比；两边都是 Windows 形态时再忽略大小写比（Windows 文件系统不区分大小写，POSIX 形态保持严格）。 */
+export function samePath(a, b) {
+  return a === b || (isWindowsPath(a) && isWindowsPath(b) && a.toLowerCase() === b.toLowerCase())
+}
+
+/** 把绝对路径折算为相对 cwd 的路径；不在 cwd 下或 cwd 未知时原样返回绝对路径。Windows 形态下前缀按大小写不敏感比对，切片仍取原串以保留用户大小写。 */
 export function relativize(path, cwd) {
   const p = normalizePath(path)
   if (cwd === undefined || cwd === null || cwd === '') return p
   const root = normalizePath(cwd).replace(/\/+$/u, '')
-  if (root !== '' && p.startsWith(`${root}/`)) return p.slice(root.length + 1)
+  if (root === '') return p
+  if (p.startsWith(`${root}/`)) return p.slice(root.length + 1)
+  if (samePath(root, p.slice(0, root.length)) && p.charAt(root.length) === '/') return p.slice(root.length + 1)
   return p
 }
 
@@ -54,11 +66,11 @@ export function buildReference(absPath, entryType, cwd) {
 export function pickSessionId(byId, currentId, treeRoot) {
   const root = treeRoot === undefined || treeRoot === null ? '' : normalizePath(treeRoot).replace(/\/+$/u, '')
   const cwdOf = (row) => (row?.cwd === undefined || row?.cwd === null ? '' : normalizePath(row.cwd).replace(/\/+$/u, ''))
-  if (currentId !== undefined && currentId !== null && (root === '' || cwdOf(byId?.[currentId]) === root)) return currentId
+  if (currentId !== undefined && currentId !== null && (root === '' || samePath(cwdOf(byId?.[currentId]), root))) return currentId
   if (root !== '') {
     for (const [id, row] of Object.entries(byId ?? {})) {
       const cwd = cwdOf(row)
-      if (cwd !== '' && cwd === root) return id
+      if (cwd !== '' && samePath(cwd, root)) return id
     }
   }
   return currentId
