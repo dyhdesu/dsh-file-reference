@@ -1,0 +1,8 @@
+# dsh-file-reference bundle patch：把插件行插进 profile 根。
+# 由 `dsh plugin add dsh-file-reference` 应用；该行让 cordis 加载无操作的
+# host 半区（src/index.js），并让 client 模块系统发现本包的 dsh.client
+# 声明、把 src/client.js 服务到页面。
+
+- insert:
+    - id: file-reference
+      name: 'dsh-file-reference'

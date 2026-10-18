@@ -1,0 +1,12 @@
+# ignore OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+
+# ignore build outputs and caches
+node_modules/
+*.tgz
+
+# never publish local work files that share this directory
+*.xlsx
+*.xls
